@@ -125,20 +125,47 @@ def solve_problem_solving_easy(input: tuple) -> list:
     Returns:
     list: A list of strings representing the solution to the problem.
     """
-    return []
+    words, X = input
+    word_counts = {}
+    for word in words:
+        if word in word_counts:
+            word_counts[word] += 1
+        else:
+            word_counts[word] = 1
+    sorted_words = sorted(word_counts.keys(), key=lambda word: (-word_counts[word], word))
+    return sorted_words[:X]
 
 
 def solve_problem_solving_medium(input: str) -> str:
     """
-    This function takes a string as input and returns a string as output.
+    This function takes an encoded string as input and returns the decoded string.
 
     Parameters:
-    input (str): A string representing the input data.
+    input (str): An encoded string.
 
     Returns:
-    str: A string representing the solution to the problem.
+    str: The decoded string.
     """
-    return ''
+    stack = []
+    current_string = ""
+
+    for char in input:
+        if char == "[":
+            stack.append(current_string)
+            current_string = ""
+        elif char == "]":
+            if stack:
+                decoded_string = stack.pop()
+                repeat_count = ""
+                while decoded_string and decoded_string[-1].isdigit():
+                    repeat_count = decoded_string[-1] + repeat_count
+                    decoded_string = decoded_string[:-1]
+                decoded_string += int(repeat_count) * current_string
+                current_string = decoded_string
+        else:
+            current_string += char
+
+    return current_string
 
 
 def solve_problem_solving_hard(input: tuple) -> int:
