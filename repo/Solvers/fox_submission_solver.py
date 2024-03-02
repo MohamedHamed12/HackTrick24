@@ -1,18 +1,57 @@
 import requests
 import numpy as np
-from LSBSteg import encode
-from riddle_solvers import riddle_solvers
+import json
+port=5000
+api_base_url = 'https://3.70.97.142:'+str(port)
 
-api_base_url = None
-team_id=None
+team_id='ds42W0d'
+
+import requests
+from pathlib import Path
+base_dir=Path(__file__).resolve().parent
+print(base_dir)
+# from LSBSteg import encode
+# from riddle_solvers import riddle_solvers
 
 def init_fox(team_id):
     '''
-    In this fucntion you need to hit to the endpoint to start the game as a fox with your team id.
-    If a sucessful response is returned, you will recive back the message that you can break into chunkcs
-      and the carrier image that you will encode the chunk in it.
+    In this function you need to hit to the endpoint to start the game as a fox with your team id.
+    If a successful response is returned, you will receive back the message that you can break into chunks
+    and the carrier image that you will encode the chunk in it.
     '''
-    pass
+ 
+    endpoint = f"{api_base_url}/fox/start/"
+    
+    # Request payload
+    payload = {"team_id": team_id}
+    
+    try:
+        # Send POST request to start the game as a fox
+        response = requests.post(endpoint, json=payload)
+        
+        # Check if request was successful
+        if response.status_code == 200 or response.status_code == 201:
+            # If request was successful
+            print("Initialized the game as a fox.")
+            # Parse response data
+            data = response.json()
+            message = data.get("message")
+            carrier_image = data.get("carrier_image")
+            with open("data.json", "w") as f:
+                json.dump(data, f)
+            # Return message and carrier image
+            return message, carrier_image
+        else:
+            # If request failed, print error message
+            print("Failed to initialize the game as a fox. Status code:", response.status_code)
+            return None, None
+    except Exception as e:
+        # Handle any exceptions
+        print("An error occurred:", e)
+        return None, None
+
+
+
 
 def generate_message_array(message, image_carrier):  
     '''
