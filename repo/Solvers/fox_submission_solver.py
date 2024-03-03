@@ -2,7 +2,7 @@ from riddle_solvers import riddle_solvers
 import requests
 import numpy as np
 import json
-
+from fox_utils import * 
 api_base_url = "http://3.70.97.142:5000"
 
 team_id = 'ds42W0d'
@@ -60,7 +60,11 @@ def generate_message_array(message, image_carrier):
         2. Include any fake chunks
         3. Decide what 3 chuncks you will send in each turn in the 3 channels & what is their entities (F,R,E)
         4. Encode each chunck in the image carrier  
-    '''
+    ''' 
+    chunks=split_massage_chunks(message,3)
+    fake_chunks=split_massage_chunks("01234567890123456789",3)
+    
+
     pass
 
 
