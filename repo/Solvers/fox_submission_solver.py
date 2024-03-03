@@ -1,10 +1,11 @@
 import requests
 import numpy as np
 import json
-port=5000
-api_base_url = 'https://3.70.97.142:'+str(port)
 
-team_id='ds42W0d'
+api_base_url =  "http://3.70.97.142:5000"
+
+# team_id='ds42W0d'
+team_id = "your_team_id_here"
 
 import requests
 from pathlib import Path
@@ -20,35 +21,35 @@ def init_fox(team_id):
     and the carrier image that you will encode the chunk in it.
     '''
  
-    endpoint = f"{api_base_url}/fox/start/"
     
-    # Request payload
-    payload = {"team_id": team_id}
-    
-    try:
-        # Send POST request to start the game as a fox
-        response = requests.post(endpoint, json=payload)
-        
-        # Check if request was successful
-        if response.status_code == 200 or response.status_code == 201:
-            # If request was successful
-            print("Initialized the game as a fox.")
-            # Parse response data
-            data = response.json()
-            message = data.get("message")
-            carrier_image = data.get("carrier_image")
-            with open("data.json", "w") as f:
-                json.dump(data, f)
-            # Return message and carrier image
-            return message, carrier_image
-        else:
-            # If request failed, print error message
-            print("Failed to initialize the game as a fox. Status code:", response.status_code)
-            return None, None
-    except Exception as e:
-        # Handle any exceptions
-        print("An error occurred:", e)
-        return None, None
+    # Define the endpoint URL and team ID
+    endpoint = "http://3.70.97.142:5000/fox/start"
+    team_id = "your_team_id_here"
+
+    # Construct the request body
+    payload = {
+        "teamId": team_id
+    }
+
+    # Send the POST request
+    response = requests.post(endpoint, json=payload)
+
+    # Check if the request was successful
+    if response.status_code == 200 or response.status_code == 201:
+        # Extract data from the response
+        data = response.json()
+        secret_message = data["msg"]
+        carrier_image = data["carrier image"]
+        with open("message.json", "w") as f:
+            json.dump(secret_message, f)
+        # Convert carrier image to NumPy array if needed
+        # numpy_carrier_image = np.array(carrier_image)
+
+        # Start using secret message and carrier image for the game
+        print("Secret Message:", secret_message)
+        print("Carrier Image:", carrier_image)
+    else:
+        print("Error:", response.status_code)
 
 
 
