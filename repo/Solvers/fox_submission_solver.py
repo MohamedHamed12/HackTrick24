@@ -1,3 +1,5 @@
+import random
+import string
 from .riddle_solvers import riddle_solvers
 import requests
 import numpy as np
@@ -9,7 +11,6 @@ from ..LSBSteg import encode
 api_base_url = "http://3.70.97.142:5000"
 
 team_id = 'ds42W0d'
-
 
 def get_cache_file(cache_file):
     __dir__ = os.path.dirname(__file__)
@@ -217,6 +218,29 @@ def end_fox(team_id, use_cache):
         print("Error:", response.status_code)
 
 
+def get_random_message():
+    length = np.random.randint(10, 21)
+    return ''.join(random.choices(string.ascii_letters + '     ', k=length))
+
+
+def solve_all_riddles():
+    solved_riddles = ["problem_solving_easy",
+                      "problem_solving_medium", "problem_solving_hard", "sec_hard"]
+
+    total_budget = 0
+    for riddle in solved_riddles:
+        test_case = get_riddle(team_id, riddle, True)['test_case']
+        solution = riddle_solvers[riddle](test_case)
+        data = solve_riddle(team_id, solution, True)
+        total_budget += data['total_budget']
+        print(f'{total_budget=}')
+        cache_file = get_cache_file(f'riddle_solver_{riddle}.json')
+        with open(cache_file, 'w') as f:
+            json.dump(data, f)
+
+    return total_budget
+
+
 def submit_fox_attempt(team_id):
     '''
      Call this function to start playing as a fox. 
@@ -237,32 +261,46 @@ def submit_fox_attempt(team_id):
         3. Refer To the documentation to know more about the API handling 
     '''
 
-    # init a new game
-    data = init_fox(team_id, False)
+    data = init_fox(team_id, True)
     message = data['msg']
     image = data['carrier_image']
     image = np.array(image)
 
-    solved_riddles = ["problem_solving_easy",
-                      "problem_solving_medium", "problem_solving_hard"]
+    total_budget = solve_all_riddles()
 
-    total_budget = 0
-    for riddle in solved_riddles:
-        test_case = get_riddle(team_id, riddle, False)['test_case']
-        solution = riddle_solvers[riddle](test_case)
-        data = solve_riddle(team_id, solution, False)
-        total_budget += data['total_budget']
-        print(f'{total_budget=}')
-        cache_file = get_cache_file(f'riddle_solver_{riddle}.json')
-        with open(cache_file, 'w') as f:
-            json.dump(data, f)
     empty = generate_message_array("", image, 1)[0]
-    real = generate_message_array(message, image, 7)
-    fake = generate_message_array('01234567890123456789', image, 3)
-    # messages=make_random_massage(real,fake)
-    for message in real:
-        data = send_message(team_id, np.array(
-            [empty, empty, message]), ['E', 'E', 'R'])
-        print("Message sent: ", data)
 
-    end_fox(team_id, False)
+    chunks_cnt = np.random.randint(5, 10)
+    chunks = generate_message_array(message, image, chunks_cnt)
+    without_real_cnt = np.random.randint(0, 3)
+    messages_cnt = chunks_cnt + without_real_cnt
+
+    messages = []
+
+    for i in range(messages_cnt):
+        messages.append(([empty, empty, empty], ['E', 'E', 'E']))
+
+    for i in range(total_budget):
+        fake = generate_message_array(get_random_message(), image, 1)[0]
+        j = np.random.randint(0, messages_cnt)
+        k = np.random.randint(0, 3)
+        messages[j][0][k] = fake
+        messages[j][1][k] = 'F'
+
+    real_indices = list(range(messages_cnt))
+    while len(real_indices) > chunks_cnt:
+        i = np.random.randint(0, len(real_indices))
+        real_indices.pop(i)
+
+    for i in range(chunks_cnt):
+        j = np.random.randint(0, 3)
+        messages[real_indices[i]][0][j] = chunks[i]
+        messages[real_indices[i]][1][j] = 'R'
+
+    print(chunks_cnt, messages_cnt)
+    for imgs, entities in messages:
+        print(entities)
+        # data = send_message(team_id, np.array(imgs), entities)
+        # print("Message sent: ", data)
+
+    end_fox(team_id, True)
