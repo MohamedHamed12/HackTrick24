@@ -1,5 +1,8 @@
+import json
+import numpy as np
 import requests
-from repo.Solvers.fox_submission_solver import submit_fox_attempt
+from repo.LSBSteg import decode
+from repo.Solvers.fox_submission_solver import generate_message_array, submit_fox_attempt
 from repo.Solvers.fox_utils import split_massage_chunks
 from repo.Solvers.riddle_solvers import solve_problem_solving_hard, solve_problem_solving_medium
 
@@ -27,6 +30,20 @@ def get_remaining_attempts():
     print(res.json())
 
 
-get_remaining_attempts()
+def encode_decode():
+    with open('game.json', 'r') as f:
+        content = json.loads(f.read())
+        img = content['carrier_image']
+        img = np.array(img)
 
-# submit_fox_attempt(team_id)
+    enc_images = generate_message_array("Muhammad Assawalhy", img, 3)
+    dec = []
+    for enc in enc_images:
+        dec.append(decode(enc))
+    print(dec)
+
+
+get_remaining_attempts()
+# encode_decode()
+
+submit_fox_attempt(team_id)

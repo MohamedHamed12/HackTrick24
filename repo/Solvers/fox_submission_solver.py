@@ -61,7 +61,7 @@ def init_fox(team_id, use_cache):
         print(f"Request failed with status code {response.status_code}")
 
 
-def generate_message_array(message, image_carrier, num):
+def generate_message_array(message, image_carrier: np.ndarray, num):
     '''
     In this function you will need to create your own startegy. That includes:
         1. How you are going to split the real message into chunkcs
@@ -71,7 +71,7 @@ def generate_message_array(message, image_carrier, num):
     '''
 
     chunks = split_massage_chunks(message, num)
-    images = [encode(image_carrier, chunk) for chunk in chunks]
+    images = [encode(image_carrier.copy(), chunk) for chunk in chunks]
 
     return images
 
@@ -209,9 +209,9 @@ def end_fox(team_id, use_cache):
     # Check if the request was successful
     if response.status_code == 200 or response.status_code == 201:
         # Extract data from the response
-        data = response.json()
+        data = response.text
         with open(cache_file, "w") as f:
-            json.dump(data, f)
+            f.write(data)
         return data
     else:
         print("Error:", response.status_code)
@@ -257,11 +257,12 @@ def submit_fox_attempt(team_id):
         with open(cache_file, 'w') as f:
             json.dump(data, f)
     empty = generate_message_array("", image, 1)[0]
-    real = generate_message_array(message, image, 3)
-    # fake=generate_message_array('01234567890123456789',image,3)
+    real = generate_message_array(message, image, 7)
+    fake = generate_message_array('01234567890123456789', image, 3)
     # messages=make_random_massage(real,fake)
     for message in real:
-        data = send_message(team_id, [empty, empty, message], ['E', 'E', 'R'])
+        data = send_message(team_id, np.array(
+            [empty, empty, message]), ['E', 'E', 'R'])
         print("Message sent: ", data)
 
     end_fox(team_id, False)
