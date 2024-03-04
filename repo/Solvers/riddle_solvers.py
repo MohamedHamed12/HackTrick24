@@ -1,5 +1,6 @@
 # Add the necessary imports here
 import pandas as pd
+from pyparsing import deque
 # import torch
 # from utils import *
 
@@ -146,24 +147,30 @@ def solve_problem_solving_medium(input: str) -> str:
     Returns:
     str: The decoded string.
     """
-    stack = []
+
+    def is_int(ch):
+        return ch in '0123456789'
+
+    stack = deque()
     current_string = ""
 
-    for char in input:
-        if char == "[":
-            stack.append(current_string)
-            current_string = ""
-        elif char == "]":
-            if stack:
-                decoded_string = stack.pop()
-                repeat_count = ""
-                while decoded_string and decoded_string[-1].isdigit():
-                    repeat_count = decoded_string[-1] + repeat_count
-                    decoded_string = decoded_string[:-1]
-                decoded_string += int(repeat_count) * current_string
-                current_string = decoded_string
+    tokens = []
+    for c in input:
+        if len(tokens) and is_int(tokens[-1][0]) and is_int(c):
+            tokens[-1] += c
         else:
-            current_string += char
+            tokens.append(c)
+
+    for t in tokens:
+        if t == '[':
+            pass
+        elif t == ']':
+            rep, st = stack.pop()
+            current_string += current_string[st:] * (rep - 1)
+        elif is_int(t[0]):
+            stack.append((int(t), len(current_string)))
+        else:
+            current_string += t
 
     return current_string
 
@@ -180,7 +187,7 @@ def solve_problem_solving_hard(input: tuple) -> int:
     """
     m, n = input
     dp = [[0]*(n + 1) for i in range(m + 1)]
-    dp[1][1] = 1
+    dp[0][1] = 1
     for i in range(1, m+1):
         for j in range(1, n+1):
             dp[i][j] = dp[i - 1][j] + dp[i][j - 1]

@@ -1,14 +1,22 @@
-from riddle_solvers import riddle_solvers
+from .riddle_solvers import riddle_solvers
 import requests
 import numpy as np
 import json
-from fox_utils import * 
+import os
+from .fox_utils import *
+from ..LSBSteg import encode
+
 api_base_url = "http://3.70.97.142:5000"
 
 team_id = 'ds42W0d'
 
 
-# from LSBSteg import encode
+def get_cache_file(cache_file):
+    __dir__ = os.path.dirname(__file__)
+    cache_dir = os.path.join(__dir__, ".cache")
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+    return os.path.join(cache_dir, cache_file)
 
 
 def init_fox(team_id, use_cache):
@@ -18,7 +26,7 @@ def init_fox(team_id, use_cache):
     and the carrier image that you will encode the chunk in it.
     '''
 
-    cache_file = "game.json"
+    cache_file = get_cache_file("game.json")
 
     if use_cache:
         data = None
@@ -53,19 +61,19 @@ def init_fox(team_id, use_cache):
         print(f"Request failed with status code {response.status_code}")
 
 
-def generate_message_array(message, image_carrier):
+def generate_message_array(message, image_carrier, num):
     '''
     In this function you will need to create your own startegy. That includes:
         1. How you are going to split the real message into chunkcs
         2. Include any fake chunks
         3. Decide what 3 chuncks you will send in each turn in the 3 channels & what is their entities (F,R,E)
         4. Encode each chunck in the image carrier  
-    ''' 
-    chunks=split_massage_chunks(message,3)
-    fake_chunks=split_massage_chunks("01234567890123456789",3)
-    
+    '''
 
-    pass
+    chunks = split_massage_chunks(message, num)
+    images = [encode(image_carrier, chunk) for chunk in chunks]
+
+    return images
 
 
 def get_riddle(team_id, riddle_id, use_cache):
@@ -79,7 +87,7 @@ def get_riddle(team_id, riddle_id, use_cache):
           will allow you to answer only the new riddle and you will have no access again to the old riddle. 
     '''
 
-    cache_file = "test_case.json"
+    cache_file = get_cache_file(f"test_case_{riddle_id}.json")
 
     if use_cache:
         data = None
@@ -113,9 +121,9 @@ def solve_riddle(team_id, solution, use_cache):
     You will hit the API end point that submits your answer.
     Use te riddle_solvers.py to implement the logic of each riddle.
     '''
-    
-    cache_file = "solve_riddle.json"
-    
+
+    cache_file = get_cache_file("solve_riddle.json")
+
     if use_cache:
         data = None
         with open(cache_file, 'r') as f:
@@ -127,7 +135,7 @@ def solve_riddle(team_id, solution, use_cache):
     # Construct the request body
     payload = {
         "teamId": team_id,
-        "solution": str(solution)
+        "solution": solution
     }
 
     # Send the POST request
@@ -144,16 +152,35 @@ def solve_riddle(team_id, solution, use_cache):
         print("Error:", response.status_code)
 
 
-def send_message(team_id, messages, message_entities=['F', 'E', 'R']):
+def send_message(team_id, messages: np.ndarray, message_entities=['F', 'E', 'R']):
     '''
     Use this function to call the api end point to send one chunk of the message. 
     You will need to send the message (images) in each of the 3 channels along with their entites.
     Refer to the API documentation to know more about what needs to be send in this api call. 
     '''
-    pass
+
+    endpoint = "http://3.70.97.142:5000/fox/send-message"
+
+    # Construct the request body
+    payload = {
+        "teamId": team_id,
+        "messages": messages.tolist(),
+        "message_entities": message_entities
+    }
+
+    # Send the POST request
+    response = requests.post(endpoint, json=payload)
+
+    # Check if the request was successful
+    if response.status_code == 200 or response.status_code == 201:
+        # Extract data from the response
+        data = response.json()
+        return data
+    else:
+        print("Error:", response.status_code)
 
 
-def end_fox(team_id):
+def end_fox(team_id, use_cache):
     '''
     Use this function to call the api end point of ending the fox game.
     Note that:
@@ -161,7 +188,33 @@ def end_fox(team_id):
     2. Calling it without sending all the real messages will also affect your scoring fucntion
       (Like failing to submit the entire message within the timelimit of the game).
     '''
-    pass
+
+    cache_file = get_cache_file("end_game.json")
+
+    if use_cache:
+        data = None
+        with open(cache_file, 'r') as f:
+            data = json.loads(f.read())
+        return data
+
+    endpoint = "http://3.70.97.142:5000/fox/end-game"
+
+    payload = {
+        "teamId": team_id
+    }
+
+    # Send the POST request
+    response = requests.post(endpoint, json=payload)
+
+    # Check if the request was successful
+    if response.status_code == 200 or response.status_code == 201:
+        # Extract data from the response
+        data = response.json()
+        with open(cache_file, "w") as f:
+            json.dump(data, f)
+        return data
+    else:
+        print("Error:", response.status_code)
 
 
 def submit_fox_attempt(team_id):
@@ -183,10 +236,32 @@ def submit_fox_attempt(team_id):
             2.b. You cannot send 3 E(Empty) messages, there should be atleast R(Real)/F(Fake)
         3. Refer To the documentation to know more about the API handling 
     '''
-    init_fox(team_id, True)
-    test_case = get_riddle(team_id, "problem_solving_easy", True)['test_case']
-    solution = riddle_solvers['problem_solving_easy'](test_case)
-    solve_riddle(team_id, solution, False)
 
+    # init a new game
+    data = init_fox(team_id, False)
+    message = data['msg']
+    image = data['carrier_image']
+    image = np.array(image)
 
-submit_fox_attempt(team_id)
+    solved_riddles = ["problem_solving_easy",
+                      "problem_solving_medium", "problem_solving_hard"]
+
+    total_budget = 0
+    for riddle in solved_riddles:
+        test_case = get_riddle(team_id, riddle, False)['test_case']
+        solution = riddle_solvers[riddle](test_case)
+        data = solve_riddle(team_id, solution, False)
+        total_budget += data['total_budget']
+        print(f'{total_budget=}')
+        cache_file = get_cache_file(f'riddle_solver_{riddle}.json')
+        with open(cache_file, 'w') as f:
+            json.dump(data, f)
+    empty = generate_message_array("", image, 1)[0]
+    real = generate_message_array(message, image, 3)
+    # fake=generate_message_array('01234567890123456789',image,3)
+    # messages=make_random_massage(real,fake)
+    for message in real:
+        data = send_message(team_id, [empty, empty, message], ['E', 'E', 'R'])
+        print("Message sent: ", data)
+
+    end_fox(team_id, False)
