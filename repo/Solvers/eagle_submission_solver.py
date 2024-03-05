@@ -45,7 +45,7 @@ def handle_response(response: requests.Response, cache_file):
         data = response.json()
     except json.decoder.JSONDecodeError:
         data = response.text
-    if response.status_code >= 400:
+    if response.status_code >= 400 and response.text != "End of message reached":
         raise Exception(f"{response.status_code}: {response.text}")
     with open(cache_file, "w") as f:
         f.write(response.text)
@@ -86,20 +86,21 @@ def select_channel(model, footprint, iteration, use_cache):
 
     for channel in ['1', '2', '3']:
         try:
+            raise Exception("Skip")
             input_data = footprint[channel]
             input_data = np.expand_dims(input_data, axis=0).astype(np.float32)
             model.set_tensor(model.get_input_details()[
-                0]['iteration'], input_data)
+                0], input_data)
             model.invoke()
             output = model.get_tensor(
-                model.get_output_details()[0]['iteration'])
+                model.get_output_details()[0])
             if output > 0.85:
                 with open(cache_file, 'w') as f:
                     json.dump(channel, f)
                 return channel
         except Exception as error:
             print(error)
-            print("Failed to run the model, use fallback channel ", channel)
+            print("Failed to run the model, use fallback channel", channel)
             with open(cache_file, 'w') as f:
                 json.dump(channel, f)
             return channel
@@ -203,7 +204,7 @@ def submit_eagle_attempt(team_id):
         5. End the Game
     '''
 
-    use_cache = True
+    use_cache = False
 
     model = get_model()  # keep at the top, time costly
 
@@ -213,7 +214,8 @@ def submit_eagle_attempt(team_id):
     while footprint:
         iteration += 1
 
-        channel = select_channel(model, footprint, iteration, use_cache=False)
+        channel = select_channel(
+            model, footprint, iteration, use_cache=use_cache)
 
         if channel == None:
             footprint = skip_msg(team_id, iteration, use_cache=use_cache)

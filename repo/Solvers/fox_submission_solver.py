@@ -224,7 +224,7 @@ def get_random_message():
 
 
 def solve_all_riddles():
-    solved_riddles = ["problem_solving_easy",
+    solved_riddles = ["cv_medium", "cv_hard", "ml_easy", "problem_solving_easy",
                       "problem_solving_medium", "problem_solving_hard", "sec_hard"]
 
     total_budget = 0
