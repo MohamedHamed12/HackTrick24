@@ -270,7 +270,7 @@ def submit_fox_attempt(team_id):
 
     empty = generate_message_array("", image, 1)[0]
 
-    chunks_cnt = np.random.randint(5, 10)
+    chunks_cnt = np.random.randint(10, 21)
     chunks = generate_message_array(message, image, chunks_cnt)
     without_real_cnt = np.random.randint(0, 3)
     messages_cnt = chunks_cnt + without_real_cnt

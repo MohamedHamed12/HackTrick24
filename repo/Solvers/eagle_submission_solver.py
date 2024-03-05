@@ -49,7 +49,7 @@ def init_eagle(team_id, use_cache):
         if data := get_cache(cache_file):
             return data
 
-    endpoint = f"{api_base_url}/eagle/start-game"
+    endpoint = f"{api_base_url}/eagle/start"
     payload = {"teamId": team_id}
     response = requests.post(endpoint, json=payload)
     return handle_response(response, cache_file)
@@ -106,7 +106,7 @@ def request_msg(team_id, channel_id, index, use_cache):
         if data := get_cache(cache_file):
             return data
 
-    endpoint = f"{api_base_url}/eagle/submit-message"
+    endpoint = f"{api_base_url}/eagle/request-message"
     payload = {"teamId": team_id, 'channelId': channel_id}
     response = requests.post(endpoint, json=payload)
     data = handle_response(response, cache_file)['encodedMsg']
@@ -168,7 +168,7 @@ def submit_eagle_attempt(team_id):
         5. End the Game
     '''
 
-    footprint = init_eagle(team_id)['footprint']
+    footprint = init_eagle(team_id, use_cache=False)['footprint']
     print(footprint)
 
     index = 0
@@ -184,6 +184,5 @@ def submit_eagle_attempt(team_id):
             decoded_msg = decode(encoded_msg)
             footprint = submit_msg(
                 team_id, channel, decoded_msg, index, use_cache=False)
-
 
     end_eagle()
