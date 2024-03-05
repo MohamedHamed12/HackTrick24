@@ -3,38 +3,52 @@ import os
 from ..LSBSteg import decode
 import requests
 import numpy as np
-import tensorflow as tf
 
 api_base_url = "http://3.70.97.142:5000"
 team_id = 'ds42W0d'
-__dir__ = os.path.dirname(__file__)
-model_path = os.path.join(__dir__, "../../model1.tflite")
-interpreter = tf.lite.Interpreter(model_path=model_path)
-interpreter.allocate_tensors()
+
+
+def get_model():
+    import tensorflow as tf
+    __dir__ = os.path.dirname(__file__)
+    model_path = os.path.join(__dir__, "../../model1.tflite")
+    interpreter = tf.lite.Interpreter(model_path=model_path)
+    interpreter.allocate_tensors()
+    return interpreter
+
+
+def get_cache_file(cache_file):
+    __dir__ = os.path.dirname(__file__)
+    cache_file = os.path.join(
+        __dir__, ".cache", "eagle", cache_file)
+    cache_dir = os.path.dirname(cache_file)
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+    return cache_file
 
 
 def get_cache(cache_file):
-    __dir__ = os.path.dirname(__file__)
-    cache_dir = os.path.join(__dir__, ".cache", "eagle")
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
-    file = os.path.join(cache_dir, cache_file)
-    if os.path.exists(file):
-        with open(file, 'r') as f:
-            data = json.loads(f.read())
+    if os.path.exists(cache_file):
+        with open(cache_file, 'r') as f:
+            try:
+                data = json.loads(f.read())
+            except:
+                data = f.read()
             return data
 
     return None
 
 
-def handle_response(response: requests.Response, cache_file, is_text=False):
-    if response.status_code == 200 or response.status_code == 201:
-        data = response.text if is_text else response.json()
-        with open(get_cache(cache_file), "w") as f:
-            f.write(data.text)
-        return data
-    else:
-        raise f"{response.status_code}: {response.text}"
+def handle_response(response: requests.Response, cache_file):
+    try:
+        data = response.json()
+    except json.decoder.JSONDecodeError:
+        data = response.text
+    if response.status_code >= 400:
+        raise Exception(f"{response.status_code}: {response.text}")
+    with open(cache_file, "w") as f:
+        f.write(response.text)
+    return data
 
 
 def init_eagle(team_id, use_cache):
@@ -43,19 +57,19 @@ def init_eagle(team_id, use_cache):
     If a sucessful response is returned, you will recive back the first footprints.
     '''
 
-    cache_file = 'game.json'
+    cache_file = get_cache_file('game.json')
 
     if use_cache:
         if data := get_cache(cache_file):
-            return data
+            return data['footprint']
 
     endpoint = f"{api_base_url}/eagle/start"
     payload = {"teamId": team_id}
     response = requests.post(endpoint, json=payload)
-    return handle_response(response, cache_file)
+    return handle_response(response, cache_file)['footprint']
 
 
-def select_channel(footprint):
+def select_channel(model, footprint, iteration, use_cache):
     '''
     According to the footprint you recieved (one footprint per channel)
     you need to decide if you want to listen to any of the 3 channels or just skip this message.
@@ -63,48 +77,65 @@ def select_channel(footprint):
     Refer to the documentation of the Footprints to know more what the footprints represent to guide you in your approach.        
     '''
 
+    cache_file = get_cache_file(f'{iteration}/select_channel.json')
+
+    if use_cache:
+        if data := get_cache(cache_file):
+            return data
+
     for channel in ['1', '2', '3']:
-        input_data = footprint[channel]
-        input_data = np.expand_dims(input_data, axis=0).astype(np.float32)
-        interpreter.set_tensor(interpreter.get_input_details()[
-            0]['index'], input_data)
-        interpreter.invoke()
-        output = interpreter.get_tensor(
-            interpreter.get_output_details()[0]['index'])
-        if output > 0.85:
+        try:
+            input_data = footprint[channel]
+            input_data = np.expand_dims(input_data, axis=0).astype(np.float32)
+            model.set_tensor(model.get_input_details()[
+                0]['iteration'], input_data)
+            model.invoke()
+            output = model.get_tensor(
+                model.get_output_details()[0]['iteration'])
+            if output > 0.85:
+                with open(cache_file, 'w') as f:
+                    json.dump(channel, f)
+                return channel
+        except:
+            print("Failed to run the model, use fallback channel ", channel)
+            with open(cache_file, 'w') as f:
+                json.dump(channel, f)
             return channel
 
 
-def skip_msg(team_id, index, use_cache):
+def skip_msg(team_id, iteration, use_cache):
     '''
     If you decide to NOT listen to ANY of the 3 channels then you need to hit the end point skipping the message.
     If sucessful request to the end point , you will expect to have back new footprints IF ANY.
     '''
 
-    cache_file = 'skip_{index}.json'
+    cache_file = get_cache_file(f'{iteration}/skip_msg.json')
 
     if use_cache:
         if data := get_cache(cache_file):
-            return data
+            if data == "End of message reached":
+                return None
+            return json.loads(data)['nextFootprint']
 
     endpoint = f"{api_base_url}/eagle/skip-message"
     payload = {"teamId": team_id}
     response = requests.post(endpoint, json=payload)
-    data = handle_response(response, cache_file, True)
+    data = handle_response(response, cache_file)
     if data == "End of message reached":
         return None
     return json.loads(data)['nextFootprint']
 
 
-def request_msg(team_id, channel_id, index, use_cache):
+def request_msg(team_id, channel_id, iteration, use_cache):
     '''
     If you decide to listen to any of the 3 channels then you need to hit the end point of selecting a channel to hear on (1,2 or 3)
     '''
-    cache_file = f'request_msg_{index}.json'
+
+    cache_file = get_cache_file(f'{iteration}/request_msg.json')
 
     if use_cache:
         if data := get_cache(cache_file):
-            return data
+            return data['encodedMsg']
 
     endpoint = f"{api_base_url}/eagle/request-message"
     payload = {"teamId": team_id, 'channelId': channel_id}
@@ -113,7 +144,7 @@ def request_msg(team_id, channel_id, index, use_cache):
     return data
 
 
-def submit_msg(team_id, decoded_msg, index, use_cache):
+def submit_msg(team_id, decoded_msg, iteration, use_cache):
     '''
     In this function you are expected to:
         1. Decode the message you requested previously
@@ -121,16 +152,18 @@ def submit_msg(team_id, decoded_msg, index, use_cache):
     If sucessful request to the end point , you will expect to have back new footprints IF ANY.
     '''
 
-    cache_file = f'submit_{index}.json'
+    cache_file = get_cache_file(f'{iteration}/submit_msg.json')
 
     if use_cache:
         if data := get_cache(cache_file):
-            return data
+            if data == "End of message reached":
+                return None
+            return json.loads(data)['nextFootprint']
 
     endpoint = f"{api_base_url}/eagle/submit-message"
     payload = {"teamId": team_id, 'decodedMsg': decoded_msg}
     response = requests.post(endpoint, json=payload)
-    data = handle_response(response, cache_file, True)
+    data = handle_response(response, cache_file)
     if data == "End of message reached":
         return None
     return json.loads(data)['nextFootprint']
@@ -143,7 +176,7 @@ def end_eagle(team_id, use_cache):
     1. Not calling this fucntion will cost you in the scoring function
     '''
 
-    cache_file = 'end-game.json'
+    cache_file = get_cache_file('end-game.json')
 
     if use_cache:
         if data := get_cache(cache_file):
@@ -152,7 +185,7 @@ def end_eagle(team_id, use_cache):
     endpoint = f"{api_base_url}/eagle/end-game"
     payload = {"teamId": team_id}
     response = requests.post(endpoint, json=payload)
-    handle_response(response, cache_file, True)
+    handle_response(response, cache_file)
 
 
 def submit_eagle_attempt(team_id):
@@ -168,21 +201,24 @@ def submit_eagle_attempt(team_id):
         5. End the Game
     '''
 
-    footprint = init_eagle(team_id, use_cache=False)['footprint']
-    print(footprint)
+    model = get_model()  # keep at the top, time costly
 
-    index = 0
+    footprint = init_eagle(team_id, use_cache=True)
+
+    iteration = 0
     while footprint:
-        index += 1
+        iteration += 1
 
-        channel = select_channel(footprint)
+        channel = select_channel(model, footprint, iteration, use_cache=True)
 
         if channel == None:
-            footprint = skip_msg()
+            footprint = skip_msg(team_id, iteration, use_cache=True)
         else:
-            encoded_msg = request_msg(team_id, channel, index, use_cache=False)
-            decoded_msg = decode(encoded_msg)
+            channel = int(channel)
+            encoded_msg = request_msg(
+                team_id, channel, iteration, use_cache=True)
+            decoded_msg = decode(np.array(encoded_msg))
             footprint = submit_msg(
-                team_id, channel, decoded_msg, index, use_cache=False)
+                team_id, channel, decoded_msg, iteration, use_cache=True)
 
-    end_eagle()
+    end_eagle(team_id, use_cache=False)
