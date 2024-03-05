@@ -30,10 +30,11 @@ def get_cache_file(cache_file):
 def get_cache(cache_file):
     if os.path.exists(cache_file):
         with open(cache_file, 'r') as f:
+            content = f.read()
             try:
-                data = json.loads(f.read())
+                data = json.loads(content)
             except:
-                data = f.read()
+                data = f.read(content)
             return data
 
     return None
@@ -96,7 +97,8 @@ def select_channel(model, footprint, iteration, use_cache):
                 with open(cache_file, 'w') as f:
                     json.dump(channel, f)
                 return channel
-        except:
+        except Exception as error:
+            print(error)
             print("Failed to run the model, use fallback channel ", channel)
             with open(cache_file, 'w') as f:
                 json.dump(channel, f)
@@ -140,8 +142,8 @@ def request_msg(team_id, channel_id, iteration, use_cache):
     endpoint = f"{api_base_url}/eagle/request-message"
     payload = {"teamId": team_id, 'channelId': channel_id}
     response = requests.post(endpoint, json=payload)
-    data = handle_response(response, cache_file)['encodedMsg']
-    return data
+    data = handle_response(response, cache_file)
+    return data['encodedMsg']
 
 
 def submit_msg(team_id, decoded_msg, iteration, use_cache):
@@ -185,7 +187,7 @@ def end_eagle(team_id, use_cache):
     endpoint = f"{api_base_url}/eagle/end-game"
     payload = {"teamId": team_id}
     response = requests.post(endpoint, json=payload)
-    handle_response(response, cache_file)
+    return handle_response(response, cache_file)
 
 
 def submit_eagle_attempt(team_id):
@@ -201,24 +203,26 @@ def submit_eagle_attempt(team_id):
         5. End the Game
     '''
 
+    use_cache = True
+
     model = get_model()  # keep at the top, time costly
 
-    footprint = init_eagle(team_id, use_cache=True)
+    footprint = init_eagle(team_id, use_cache=use_cache)
 
     iteration = 0
     while footprint:
         iteration += 1
 
-        channel = select_channel(model, footprint, iteration, use_cache=True)
+        channel = select_channel(model, footprint, iteration, use_cache=False)
 
         if channel == None:
-            footprint = skip_msg(team_id, iteration, use_cache=True)
+            footprint = skip_msg(team_id, iteration, use_cache=use_cache)
         else:
             channel = int(channel)
             encoded_msg = request_msg(
-                team_id, channel, iteration, use_cache=True)
+                team_id, channel, iteration, use_cache=use_cache)
             decoded_msg = decode(np.array(encoded_msg))
             footprint = submit_msg(
-                team_id, channel, decoded_msg, iteration, use_cache=True)
+                team_id, decoded_msg, iteration, use_cache=use_cache)
 
-    end_eagle(team_id, use_cache=False)
+    end_eagle(team_id, use_cache=use_cache)
